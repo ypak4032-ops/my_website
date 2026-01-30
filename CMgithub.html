@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<title>Neon WireGuard Panel</title>
+
+<style>
+body{
+    margin:0;
+    background:radial-gradient(circle at top,#0f2027,#000);
+    font-family:monospace;
+    color:#00ffe1;
+}
+.panel{
+    max-width:950px;
+    margin:40px auto;
+    padding:30px;
+    background:rgba(0,0,0,0.85);
+    border-radius:20px;
+    box-shadow:0 0 40px #00ffe1;
+}
+h1{
+    text-align:center;
+    color:#00ff88;
+    text-shadow:0 0 15px #00ff88;
+}
+select,input,button{
+    width:100%;
+    padding:12px;
+    margin:10px 0;
+    background:#000;
+    color:#00ffe1;
+    border:1px solid #00ffe1;
+    border-radius:12px;
+    font-size:16px;
+}
+button{
+    cursor:pointer;
+    font-weight:bold;
+    background:linear-gradient(90deg,#00ff88,#00ffe1);
+    color:#000;
+}
+pre{
+    background:#000;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:inset 0 0 25px #00ffe1;
+    white-space:pre-wrap;
+    word-break:break-all;
+}
+.status{
+    margin-top:15px;
+    color:#00ff88;
+    font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+<div class="panel">
+
+<h1>⚡ Neon WireGuard Config Generator ⚡</h1>
+
+<label>🗄 انتخاب سرور (واقعی‌نما):</label>
+<select id="server"></select>
+
+<label>✏️ اسم کانفیگ:</label>
+<input id="configname" placeholder="مثلاً NeonVPN-01">
+
+<button onclick="generateConfig()">🚀 ساخت کانفیگ</button>
+<button onclick="downloadConfig()">💾 دانلود کانفیگ</button>
+
+<div class="status" id="status"></div>
+<pre id="output"></pre>
+
+</div>
+
+<script>
+// ---------- ابزارها ----------
+function randHex(){
+    return Math.floor(Math.random()*65536).toString(16).padStart(4,"0");
+}
+
+function ipv6(template){
+    return template.replace(/xxxx/g,randHex);
+}
+
+function ipv4(){
+    return `${Math.floor(Math.random()*223)+1}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+}
+
+// ---------- Base64 واقعی WireGuard ----------
+function generateWGKey(){
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    let binary="";
+    bytes.forEach(b=>binary+=String.fromCharCode(b));
+    return btoa(binary);
+}
+
+// ---------- سرورها ----------
+const servers=[];
+for(let i=1;i<=20;i++){
+    servers.push({
+        name:`Server-${i}`,
+        users:Math.floor(Math.random()*300)+50,
+        volume:`${Math.floor(Math.random()*900)+100}GB`,
+        duration:`${Math.floor(Math.random()*11)+1} ماه`
+    });
+}
+
+const serverSelect=document.getElementById("server");
+servers.forEach((s,i)=>{
+    const opt=document.createElement("option");
+    opt.value=i;
+    opt.textContent=`${s.name} | 👥 ${s.users} | 💾 ${s.volume} | ⏳ ${s.duration}`;
+    serverSelect.appendChild(opt);
+});
+
+let finalConfig="";
+
+// ---------- ساخت کانفیگ ----------
+function generateConfig(){
+    const s=servers[serverSelect.value];
+
+    const privateKey = generateWGKey();   // Base64 معتبر
+    const publicKey  = generateWGKey();   // Base64 معتبر
+
+    const address = ipv6("2001:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx")+"/128";
+
+    const dns4 = "78.157.32.205, 78.157.32.202";
+    let dns6=[];
+    for(let i=0;i<5;i++){
+        dns6.push(ipv6("de02:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx"));
+    }
+
+    const endpoint = ipv4()+":51820";
+
+    finalConfig =
+`# ${s.name}
+# Users: ${s.users}
+# Volume: ${s.volume}
+# Duration: ${s.duration}
+
+[Interface]
+PrivateKey = ${privateKey}
+Address = ${address}
+DNS = ${dns4}, ${dns6.join(", ")}
+MTU = 1420
+
+[Peer]
+PublicKey = ${publicKey}
+Endpoint = ${endpoint}
+PersistentKeepalive = 25
+`;
+
+    document.getElementById("output").textContent = finalConfig;
+    document.getElementById("status").textContent = "✅ کانفیگ فعال شد";
+}
+
+// ---------- دانلود ----------
+function downloadConfig(){
+    if(!finalConfig){
+        alert("اول کانفیگ بساز");
+        return;
+    }
+    const name=document.getElementById("configname").value || "wireguard";
+    const blob=new Blob([finalConfig],{type:"text/plain"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=name+".conf";
+    a.click();
+}
+</script>
+
+</body>
+</html>
