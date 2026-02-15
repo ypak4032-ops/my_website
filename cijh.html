@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royal WireGuard Panel - هوشمند</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:linear-gradient(160deg,#0a0a0a,#111);font-family:'Vazirmatn',sans-serif;color:#fff;}
+.container{max-width:520px;margin:auto;padding:15px;}
+.card{background:#181818;border-radius:22px;padding:18px;margin-bottom:15px;box-shadow:0 0 35px rgba(0,255,150,.08);transition:.4s;}
+.card:hover{transform:translateY(-3px);box-shadow:0 0 45px rgba(0,255,150,.2);}
+.row{display:flex;justify-content:space-between;align-items:center;}
+.small{font-size:13px;color:#aaa;}
+input{width:100%;padding:12px;margin-top:10px;border-radius:14px;border:none;background:#222;color:#fff;}
+button{width:100%;padding:14px;border:none;border-radius:16px;margin-top:10px;font-weight:bold;cursor:pointer;transition:.3s;}
+.connect{background:#1db954;color:#000;}
+.disconnect{background:#ff4444;color:#fff;}
+.download{background:#333;color:#fff;}
+button:hover{opacity:.85;}
+.circle-container{position:relative;width:220px;margin:20px auto;text-align:center;}
+.circle{width:220px;height:220px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:bold;position:relative;background:#222;overflow:hidden;}
+.circle-fill{position:absolute;width:100%;height:100%;border-radius:50%;background:conic-gradient(#3399ff 0%, #222 0%);}
+.wave{position:absolute;width:200%;height:50%;background:rgba(51,153,255,0.25);border-radius:40%;animation:wave 4s linear infinite;bottom:0;}
+@keyframes wave{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+.status-dot{width:10px;height:10px;border-radius:50%;margin-left:6px;display:inline-block;}
+.active{background:#1db954;box-shadow:0 0 10px #1db954;}
+.off{background:#555;}
+.hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div id="createPage">
+<div class="card">
+<h3>ساخت سرویس جدید 👑</h3>
+<input type="text" id="name" placeholder="نام کاربری 🛡️Ali123">
+<input type="number" id="days" placeholder="مدت (روز)">
+<input type="number" id="volumeGB" placeholder="حجم (GB)">
+<button onclick="createService()">ساخت لینک ساب</button>
+<div id="linkBox" class="small"></div>
+</div>
+</div>
+
+<div id="servicePage" class="hidden">
+<div class="card row">
+<div id="username"></div>
+<div><span id="dot" class="status-dot off"></span> <span id="statusText">قطع</span></div>
+</div>
+
+<div class="card row">
+<div>⏳ زمان باقی‌مانده</div>
+<div id="timeLeft"></div>
+</div>
+
+<div class="card row">
+<div>📥 حجم مصرف شده</div>
+<div id="volumeUsed"></div>
+</div>
+
+<div class="card circle-container">
+<div class="circle" id="circle">
+<div class="wave"></div>
+<span id="percentText">0 GB</span>
+</div>
+<div class="small" style="text-align:center;" id="volumeText">0 / 0 GB</div>
+</div>
+
+<div class="card">
+<button class="connect" onclick="connect()">اتصال</button>
+<button class="disconnect" onclick="disconnect()">قطع اتصال</button>
+<button class="download" onclick="downloadConfig()">دانلود کانفیگ</button>
+</div>
+</div>
+
+</div>
+
+<script>
+const interval = 5*60*60*1000; // هر 5 ساعت
+const decreasePerInterval = 0.03; // 30MB = 0.03 GB
+let user=null, token=null;
+
+function createService(){
+  let name=document.getElementById("name").value.trim();
+  let days=parseInt(document.getElementById("days").value);
+  let volume=parseFloat(document.getElementById("volumeGB").value);
+  if(!name||!days||!volume){alert("تمام فیلدها پر کن 👑"); return;}
+  token=Math.random().toString(36).substring(2);
+  user={name,days,created:Date.now(),totalGB:volume,used:0,connected:false,lastCheck:Date.now()};
+  localStorage.setItem("user_"+token,JSON.stringify(user));
+  let link=window.location.href.split("?")[0]+"?sub="+token;
+  document.getElementById("linkBox").innerHTML="لینک ساب 👇<br><a href='"+link+"'>"+link+"</a>";
+}
+
+function loadService(t){
+  token=t;
+  user=JSON.parse(localStorage.getItem("user_"+token));
+  if(!user) return;
+  document.getElementById("createPage").classList.add("hidden");
+  document.getElementById("servicePage").classList.remove("hidden");
+  document.getElementById("username").innerText=user.name;
+  updateUI();
+  setInterval(updateUI,1000);
+}
+
+function updateUI(){
+  let now=Date.now();
+  let expire=user.created+(user.days*24*60*60*1000);
+  let diff=expire-now;
+  if(diff<0) diff=0;
+  let days=Math.floor(diff/(1000*60*60*24));
+  let hours=Math.floor((diff/(1000*60*60))%24);
+  let minutes=Math.floor((diff/(1000*60))%60);
+  let seconds=Math.floor((diff/1000)%60);
+  document.getElementById("timeLeft").innerText=days+" روز "+hours+" ساعت "+minutes+" دقیقه "+seconds+" ثانیه";
+
+  if(user.connected && user.totalGB>0){
+    let elapsed=now-user.lastCheck;
+    if(elapsed>=interval){
+      let cycles=Math.floor(elapsed/interval);
+      user.used+=cycles*decreasePerInterval;
+      user.lastCheck+=cycles*interval;
+      if(user.used>user.totalGB) user.used=user.totalGB;
+      localStorage.setItem("user_"+token,JSON.stringify(user));
+    }
+  }
+
+  let remaining=user.totalGB-user.used;
+  if(remaining<0) remaining=0;
+
+  // دایره متحرک
+  document.getElementById("percentText").innerText=remaining>0?remaining.toFixed(2)+" GB":"حجم تموم شد";
+  let percent=user.totalGB?((remaining/user.totalGB)*100):0;
+  document.getElementById("circle").style.background=remaining>0?
+    `conic-gradient(#3399ff ${percent}%, #222 ${percent}%)`:
+    `#222`;
+
+  document.getElementById("volumeText").innerText=remaining.toFixed(2)+" / "+user.totalGB+" GB";
+  document.getElementById("volumeUsed").innerText=user.used.toFixed(2)+" GB";
+
+  document.getElementById("dot").className=user.connected?'status-dot active':'status-dot off';
+  document.getElementById("statusText").innerText=user.connected?"متصل":"قطع";
+
+  document.querySelector(".connect").disabled = remaining<=0;
+  document.querySelector(".disconnect").disabled = remaining<=0;
+  document.querySelector(".download").disabled = remaining<=0;
+}
+
+function connect(){user.connected=true;user.lastCheck=Date.now();localStorage.setItem("user_"+token,JSON.stringify(user));updateUI();}
+function disconnect(){user.connected=false;localStorage.setItem("user_"+token,JSON.stringify(user));updateUI();}
+function downloadConfig(){
+  let text=`[Interface]
+PrivateKey = YoUW+9NC6jkKWgLw4Hhq8k9Y3GdhDasHSKMO/Q5wEmM=
+Address = 188.115.92.28/32
+DNS = 208.67.222.222, 208.67.220.220
+MTU = 1299
+
+[Peer]
+PublicKey = Q/P8TOVc8Py9bSxnOxw4/JRa0WME185Yx2Pkfs8VfsA=
+AllowedIPs = 172.16.0.2/32, 2606:4700:110:dfa9:91ac:c439:b397:8c12/128
+Endpoint = 188.115.213.109:51066`;
+  let blob=new Blob([text],{type:"text/plain"});
+  let link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download=user.name+".conf";
+  link.click();
+}
+
+let params=new URLSearchParams(window.location.search);
+let sub=params.get("sub");
+if(sub){loadService(sub);}
+</script>
+</body>
+</html>
